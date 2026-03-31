@@ -1,4 +1,5 @@
 function Write-Log {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
         [string]$LogFile,
