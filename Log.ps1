@@ -27,7 +27,7 @@ function Write-Log {
         while ($true) {
             try {
                 # Try to create the lock file exclusively
-                $fs = [System.IO.File]::Open($LockFile, 'CreateNew', 'Write', 'None')
+                $fs=[IO.File]::Open($LockFile,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
                 $fs.Close()
                 return $true   # Lock acquired
             }
