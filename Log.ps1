@@ -1,5 +1,4 @@
 function Write-Log {
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
         [string]$LogFile,
@@ -21,7 +20,7 @@ function Write-Log {
     # -------------------------------
     $logDir = Split-Path $LogFile
     if (-not (Test-Path $logDir)) {
-        New-Item -Path $logDir -ItemType Directory | Out-Null
+        return
     }
 
     # -------------------------------
@@ -68,26 +67,29 @@ function Write-Log {
     # -------------------------------
     # Trim the log if needed
     # -------------------------------
-    if (Test-Path $LogFile) {
-        $linesToKeep = $MaxLines - $TrimLines
+    $linesToKeep = [Math]::Max(0, $MaxLines - $TrimLines)
 
-        # Read only the last $MaxLines lines lazily
-        $tailLines = [System.IO.File]::ReadLines($LogFile) | Select-Object -Last $MaxLines
+    # Only perform trimming if needed
+    if ((Get-Content $LogFile -ReadCount 0).Count -ge $MaxLines) {
 
-        if ($tailLines.Count -ge $MaxLines) {
-            # Keep only the newest lines
-            $linesToKeepArray = $tailLines | Select-Object -Last $linesToKeep
-            [System.IO.File]::WriteAllLines($LogFile, $linesToKeepArray)
+        # Use a rolling queue to keep memory usage low
+        $queue = New-Object System.Collections.Generic.Queue[string]
 
-            # -------------------------------
-            # Log trimming activity
-            # -------------------------------
-            $stream = [System.IO.StreamWriter]::new($LogFile, $true, [System.Text.Encoding]::UTF8)
-            try {
-                $stream.WriteLine("[$time] - LOG - Trimmed $TrimLines oldest lines")
-            } finally {
-                $stream.Close()
+        foreach ($line in [System.IO.File]::ReadLines($LogFile)) {
+            $queue.Enqueue($line)
+            if ($queue.Count -gt $linesToKeep) {
+                $queue.Dequeue()
             }
+        }
+
+        # Write only the newest $linesToKeep lines back to the log
+        [System.IO.File]::WriteAllLines($LogFile, $queue)
+
+        # -------------------------------
+        # Log trimming activity
+        # -------------------------------
+        using ($stream = [System.IO.StreamWriter]::new($LogFile, $true, [System.Text.Encoding]::UTF8)) {
+            $stream.WriteLine("[$time] - LOG - Trimmed $TrimLines oldest lines")
         }
     }
 }
